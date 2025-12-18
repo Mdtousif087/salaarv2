@@ -1,19 +1,16 @@
 from flask import Flask, jsonify, request
 import requests
 import os
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
 
 # ---------------- BASIC APP ----------------
 app = Flask(__name__)
 
 # ---------------- CONFIGURATION ----------------
-OWNER = os.getenv("OWNER", "-")
-PRIMARY_API_URL = os.getenv("PRIMARY_API_URL", "https://vechile2.vercel.app/api/vehicle-info")
-SECONDARY_API_URL = os.getenv("SECONDARY_API_URL", "https://flipcartstore.serv00.net/vehicle/api.php")
-SECONDARY_API_KEY = os.getenv("SECONDARY_API_KEY", "Tofficial")
+# Yeh variables Vercel ke Environment Variables se aayenge
+OWNER = os.environ.get("OWNER", "DefaultOwner")
+PRIMARY_API_URL = os.environ.get("PRIMARY_API_URL", "https://vechile2.vercel.app/api/vehicle-info")
+SECONDARY_API_URL = os.environ.get("SECONDARY_API_URL", "https://flipcartstore.serv00.net/vehicle/api.php")
+SECONDARY_API_KEY = os.environ.get("SECONDARY_API_KEY", "Tofficial")
 
 # ---------------- HEALTH CHECK ----------------
 @app.route("/health")
@@ -21,10 +18,7 @@ def health():
     return jsonify({
         "status": "ok",
         "Owner": OWNER,
-        "config": {
-            "primary_api_configured": bool(PRIMARY_API_URL),
-            "secondary_api_configured": bool(SECONDARY_API_URL and SECONDARY_API_KEY)
-        }
+        "config_loaded": True
     })
 
 # ---------------- HOME ----------------
