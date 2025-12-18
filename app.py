@@ -1,53 +1,104 @@
 from flask import Flask, jsonify, request
 import requests
 import os
+from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv()
+
+# ---------------- BASIC APP ----------------
 app = Flask(__name__)
 
-# Environment variables से values लें (Vercel में set करेंगे)
-OWNER = os.environ.get("OWNER")
-PRIMARY_API = os.environ.get("PRIMARY_API")
-SECONDARY_API = os.environ.get("SECONDARY_API")
-SECONDARY_KEY = os.environ.get("SECONDARY_KEY")
+# ---------------- CONFIGURATION ----------------
+OWNER = os.getenv("OWNER", "-")
+PRIMARY_API_URL = os.getenv("PRIMARY_API_URL", "https://vechile2.vercel.app/api/vehicle-info")
+SECONDARY_API_URL = os.getenv("SECONDARY_API_URL", "https://flipcartstore.serv00.net/vehicle/api.php")
+SECONDARY_API_KEY = os.getenv("SECONDARY_API_KEY", "Tofficial")
 
+# ---------------- HEALTH CHECK ----------------
+@app.route("/health")
+def health():
+    return jsonify({
+        "status": "ok",
+        "Owner": OWNER,
+        "config": {
+            "primary_api_configured": bool(PRIMARY_API_URL),
+            "secondary_api_configured": bool(SECONDARY_API_URL and SECONDARY_API_KEY)
+        }
+    })
+
+# ---------------- HOME ----------------
 @app.route("/")
 def home():
     return jsonify({
-        "message": "Vehicle API",
-        "use": "/vehicle-merge?reg=UP63BJ8585",
-        "owner": OWNER
+        "api": "Vehicle Merge API",
+        "status": "running",
+        "Owner": OWNER,
+        "endpoints": {
+            "/vehicle-merge?reg=<vehicle_no>": "Merge APIs using query parameter",
+            "/health": "Health check"
+        }
     })
 
+# ---------------- VEHICLE MERGE API ----------------
 @app.route("/vehicle-merge")
 def vehicle_merge():
+    # Get vehicle number from query parameter
     vehicle_no = request.args.get('reg')
     
     if not vehicle_no:
         return jsonify({
-            "error": "Use: /vehicle-merge?reg=YOUR_VEHICLE_NO"
+            "success": False,
+            "error": "Missing 'reg' query parameter",
+            "example": "/vehicle-merge?reg=UP63BJ8585"
         }), 400
     
-    # Primary API
-    try:
-        primary_url = f"{PRIMARY_API}?query={vehicle_no}"
-        p = requests.get(primary_url, timeout=5)
-        primary_data = p.json() if p.status_code == 200 else {"error": f"Status: {p.status_code}"}
-    except:
-        primary_data = {"error": "Primary API failed"}
+    primary_response = None
+    secondary_response = None
 
-    # Secondary API
+    # -------- PRIMARY API --------
     try:
-        secondary_url = f"{SECONDARY_API}?reg={vehicle_no}&key={SECONDARY_KEY}"
-        s = requests.get(secondary_url, timeout=5)
-        secondary_data = s.json() if s.status_code == 200 else {"error": f"Status: {s.status_code}"}
-    except:
-        secondary_data = {"error": "Secondary API failed"}
+        primary_url = f"{PRIMARY_API_URL}?rc={vehicle_no}"
+        p = requests.get(primary_url, timeout=8)
+        if p.status_code == 200:
+            primary_response = p.json()
+        else:
+            primary_response = {
+                "error": f"Primary API returned status {p.status_code}",
+                "status_code": p.status_code,
+                "url_used": primary_url
+            }
+    except Exception as e:
+        primary_response = {
+            "error": "Primary API failed",
+            "details": str(e),
+            "url_used": primary_url
+        }
 
+    # -------- SECONDARY API --------
+    try:
+        secondary_url = f"{SECONDARY_API_URL}?reg={vehicle_no}&key={SECONDARY_API_KEY}"
+        s = requests.get(secondary_url, timeout=8)
+        if s.status_code == 200:
+            secondary_response = s.json()
+        else:
+            secondary_response = {
+                "error": f"Secondary API returned status {s.status_code}",
+                "status_code": s.status_code
+            }
+    except Exception as e:
+        secondary_response = {
+            "error": "Secondary API failed",
+            "details": str(e)
+        }
+
+    # -------- FINAL RESPONSE --------
     return jsonify({
-        "vehicle": vehicle_no,
-        "primary": primary_data,
-        "secondary": secondary_data,
-        "owner": OWNER
+        "success": True,
+        "query": vehicle_no,
+        "primary_api_response": primary_response,
+        "secondary_api_response": secondary_response,
+        "Owner": OWNER
     })
 
 if __name__ == "__main__":
