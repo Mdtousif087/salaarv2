@@ -1,130 +1,54 @@
 from flask import Flask, jsonify, request
 import requests
 import os
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
-
-# ---------------- BASIC APP ----------------
 app = Flask(__name__)
 
-OWNER = os.getenv("OWNER", "-")  # Default "-" if not set
+# Environment variables से values लें (Vercel में set करेंगे)
+OWNER = os.environ.get("OWNER", "YourName")
+PRIMARY_API = os.environ.get("PRIMARY_API", "https://anuj-rcc.vercel.app/rc")
+SECONDARY_API = os.environ.get("SECONDARY_API", "https://flipcartstore.serv00.net/vehicle/api.php")
+SECONDARY_KEY = os.environ.get("SECONDARY_KEY", "Tofficial")
 
-# Get API configurations from environment variables
-PRIMARY_API_BASE_URL = os.getenv("PRIMARY_API_BASE_URL", "https://anuj-rcc.vercel.app/rc")
-SECONDARY_API_BASE_URL = os.getenv("SECONDARY_API_BASE_URL", "https://flipcartstore.serv00.net/vehicle/api.php")
-SECONDARY_API_KEY = os.getenv("SECONDARY_API_KEY", "Tofficial")
-
-# ---------------- HEALTH CHECK ----------------
-@app.route("/health")
-def health():
-    return jsonify({
-        "status": "ok",
-        "Owner": OWNER,
-        "config": {
-            "primary_api_configured": bool(PRIMARY_API_BASE_URL),
-            "secondary_api_configured": bool(SECONDARY_API_BASE_URL),
-            "secondary_key_configured": bool(SECONDARY_API_KEY)
-        }
-    })
-
-# ---------------- HOME ----------------
 @app.route("/")
 def home():
     return jsonify({
-        "api": "Vehicle Merge API",
-        "status": "running",
-        "Owner": OWNER,
-        "endpoints": {
-            "/vehicle-merge?reg=UP63BJ8585": "Merge APIs (using query parameter)",
-            "/health": "Health check"
-        },
-        "config_source": "environment_variables"
+        "message": "Vehicle API",
+        "use": "/vehicle-merge?reg=UP63BJ8585",
+        "owner": OWNER
     })
 
-# ---------------- VEHICLE MERGE API ----------------
 @app.route("/vehicle-merge")
 def vehicle_merge():
-    # Query parameter से vehicle नंबर लें
     vehicle_no = request.args.get('reg')
     
-    # अगर vehicle number नहीं दिया गया है
     if not vehicle_no:
         return jsonify({
-            "success": False,
-            "error": "Missing 'reg' query parameter",
-            "example": "/vehicle-merge?reg=UP63BJ8585"
+            "error": "Use: /vehicle-merge?reg=YOUR_VEHICLE_NO"
         }), 400
     
-    primary_response = None
-    secondary_response = None
+    # Primary API
+    try:
+        primary_url = f"{PRIMARY_API}?query={vehicle_no}"
+        p = requests.get(primary_url, timeout=5)
+        primary_data = p.json() if p.status_code == 200 else {"error": f"Status: {p.status_code}"}
+    except:
+        primary_data = {"error": "Primary API failed"}
 
-    # -------- PRIMARY API --------
-    if PRIMARY_API_BASE_URL:
-        try:
-            # Primary API: /rc?query={vehicle_no}
-            primary_url = f"{PRIMARY_API_BASE_URL}?query={vehicle_no}"
-            p = requests.get(primary_url, timeout=8)
-            if p.status_code == 200:
-                primary_response = p.json()
-            else:
-                primary_response = {
-                    "error": "Primary API returned non-200",
-                    "status_code": p.status_code,
-                    "url_used": primary_url
-                }
-        except Exception as e:
-            primary_response = {
-                "error": "Primary API failed",
-                "details": str(e),
-                "url_used": primary_url
-            }
-    else:
-        primary_response = {
-            "error": "Primary API URL not configured"
-        }
+    # Secondary API
+    try:
+        secondary_url = f"{SECONDARY_API}?reg={vehicle_no}&key={SECONDARY_KEY}"
+        s = requests.get(secondary_url, timeout=5)
+        secondary_data = s.json() if s.status_code == 200 else {"error": f"Status: {s.status_code}"}
+    except:
+        secondary_data = {"error": "Secondary API failed"}
 
-    # -------- SECONDARY API --------
-    if SECONDARY_API_BASE_URL and SECONDARY_API_KEY:
-        try:
-            # Secondary API: /vehicle/api.php?reg={vehicle_no}&key={key}
-            # यहाँ पूरा URL पहले से ही है, बस parameters add करने हैं
-            secondary_url = f"{SECONDARY_API_BASE_URL}?reg={vehicle_no}&key={SECONDARY_API_KEY}"
-            s = requests.get(secondary_url, timeout=8)
-            if s.status_code == 200:
-                secondary_response = s.json()
-            else:
-                secondary_response = {
-                    "error": "Secondary API returned non-200",
-                    "status_code": s.status_code,
-                    "url_used": secondary_url
-                }
-        except Exception as e:
-            secondary_response = {
-                "error": "Secondary API failed",
-                "details": str(e),
-                "url_used": secondary_url
-            }
-    else:
-        secondary_response = {
-            "error": "Secondary API not configured",
-            "missing": []
-        }
-        if not SECONDARY_API_BASE_URL:
-            secondary_response["missing"].append("SECONDARY_API_BASE_URL")
-        if not SECONDARY_API_KEY:
-            secondary_response["missing"].append("SECONDARY_API_KEY")
-
-    # -------- FINAL RESPONSE --------
     return jsonify({
-        "success": True,
-        "query": vehicle_no,
-        "primary_api_response": primary_response,
-        "secondary_api_response": secondary_response,
-        "Owner": OWNER
+        "vehicle": vehicle_no,
+        "primary": primary_data,
+        "secondary": secondary_data,
+        "owner": OWNER
     })
 
-# Run the app
 if __name__ == "__main__":
     app.run(debug=True)
