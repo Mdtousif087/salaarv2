@@ -5,10 +5,10 @@ import os
 app = Flask(__name__)
 
 # Environment variables से values लें (Vercel में set करेंगे)
-OWNER = os.environ.get("OWNER", "YourName")
-PRIMARY_API = os.environ.get("PRIMARY_API", "https://anuj-rcc.vercel.app/rc")
-SECONDARY_API = os.environ.get("SECONDARY_API", "https://flipcartstore.serv00.net/vehicle/api.php")
-SECONDARY_KEY = os.environ.get("SECONDARY_KEY", "Tofficial")
+OWNER = os.environ.get("OWNER")
+PRIMARY_API = os.environ.get("PRIMARY_API")
+SECONDARY_API = os.environ.get("SECONDARY_API")
+SECONDARY_KEY = os.environ.get("SECONDARY_KEY")
 
 @app.route("/")
 def home():
